@@ -56,51 +56,42 @@ ECLIPSE_DURATION = 30
 
 LOOKUP_KEYS = ["fileA.txt", "fileB.mp4", "docC.pdf"]
 
-# For Sybil mitigation: allow at most 2 sybil nodes per bucket.
 SYBIL_MAX_PER_BUCKET = 2
 
-# Global mitigation thresholds (RL parameters)
-DDOS_THRESHOLD_REQUESTS = 10  # if attack_requests > this, trigger mitigation
-POISONING_FAILURE_THRESHOLD = 0.5  # threshold for failed pings in a bucket
-ECLIPSE_DIVERSITY_THRESHOLD = 0.8  # if > threshold fraction from one /24, flag eclipse
+DDOS_THRESHOLD_REQUESTS = 10
+POISONING_FAILURE_THRESHOLD = 0.5
+ECLIPSE_DIVERSITY_THRESHOLD = 0.8
 
-# RL agent parameters for Q-learning
+
 ACTION_SPACE = [
-    "increase_ddos_mitigation",  # make DDoS mitigation more aggressive
-    "decrease_ddos_mitigation",  # make DDoS mitigation less aggressive
-    "tighten_sybil",  # lower SYBIL_MAX_PER_BUCKET
-    "loosen_sybil",  # raise SYBIL_MAX_PER_BUCKET
-    "tighten_poisoning",  # lower POISONING_FAILURE_THRESHOLD
-    "loosen_poisoning",  # raise POISONING_FAILURE_THRESHOLD
-    "tighten_eclipse",  # lower ECLIPSE_DIVERSITY_THRESHOLD
-    "loosen_eclipse",  # raise ECLIPSE_DIVERSITY_THRESHOLD
-    "rebalance_routing_table",  # force rebalancing of routing tables
-    "trigger_eclipse_mitigation"  # trigger eclipse mitigation on a random node
+    "increase_ddos_mitigation",
+    "decrease_ddos_mitigation",
+    "tighten_sybil",
+    "loosen_sybil",
+    "tighten_poisoning",
+    "loosen_poisoning",
+    "tighten_eclipse",
+    "loosen_eclipse",
+    "rebalance_routing_table",
+    "trigger_eclipse_mitigation"
 ]
 
-# Q-learning hyperparameters
-ALPHA_RL = 0.1  # learning rate
-GAMMA = 0.9  # discount factor
-EPSILON = 0.1  # exploration probability; will decay over time
 
-# Q-table: maps from state (tuple) to a list of Q-values (one per action)
+ALPHA_RL = 0.1
+GAMMA = 0.9
+EPSILON = 0.1
+
 Q_table = {}
 
-# For tracking previous state and action (for Q-learning update)
 last_state = None
 last_action = None
 last_reward = None
 
-# Global pointer to network (set later)
 global_network = None
 
-# Global cumulative reward for RL (accumulated over time)
 cumulative_rl_reward = 0
 
 
-###############################################################################
-# UTILS
-###############################################################################
 def generate_random_ip():
     return f"192.168.{random.randint(0, 255)}.{random.randint(1, 254)}"
 
@@ -109,9 +100,6 @@ def xor_distance(a, b):
     return a ^ b
 
 
-###############################################################################
-# ML-BASED DDoS DETECTION
-###############################################################################
 
 
 def detect_ddos_ml(features):
@@ -136,9 +124,6 @@ def print_detection(victim):
     log(f"DDoS Attack detected on Node {victim.node_id}")
 
 
-###############################################################################
-# NODE & NETWORK CLASSES (with Adaptive Mitigation for DDoS & Sybil)
-###############################################################################
 class Node:
     def __init__(self, node_id, ip=None):
         self.node_id = node_id
@@ -269,10 +254,6 @@ class Network:
         return list(self.nodes.values())
 
 
-###############################################################################
-# LOOKUP & STORE FUNCTIONS
-###############################################################################
-
 def iterative_lookup(network, start_node, target_id, alpha=ALPHA, max_rounds=MAX_ROUNDS):
     queried = set()
     shortlist = set(start_node.find_node(target_id))
@@ -346,9 +327,6 @@ def lookup_value(network, key, start_node, max_rounds=MAX_ROUNDS):
     return None, rounds
 
 
-###############################################################################
-# CONCURRENT LOOKUPS
-###############################################################################
 def concurrent_lookups(network, keys, duration, interval=2):
     start_time = time.time()
     while time.time() - start_time < duration:
@@ -362,9 +340,6 @@ def concurrent_lookups(network, keys, duration, interval=2):
         time.sleep(interval)
 
 
-###############################################################################
-# ECLIPSE / POISONING DETECTION (UNCHANGED)
-###############################################################################
 
 def detect_eclipse_by_routing_diversity(network, threshold=ECLIPSE_DIVERSITY_THRESHOLD):
     flagged_nodes = []
@@ -431,9 +406,6 @@ def detect_routing_table_poisoning_attack(network):
     return flagged
 
 
-###############################################################################
-# ADAPTIVE MITIGATION FUNCTIONS
-###############################################################################
 def update_ddos_mitigation(victim):
     if victim.attack_requests > DDOS_THRESHOLD_REQUESTS and not victim.mitigation_active:
         victim.mitigation_active = True
@@ -520,10 +492,7 @@ def mitigate_eclipse_attack(network, victim, threshold=ECLIPSE_DIVERSITY_THRESHO
             log(f"[Eclipse Mitigation] Node {victim.node_id}: Bucket {b_idx} mitigated; removed contacts from subnet {most_common_subnet} and refilled with {len(new_contacts)} new contacts.")
 
 
-###############################################################################
-# RL AGENT: STATE, ACTION, REWARD, AND Q-LEARNING UPDATE
-###############################################################################
-# Use coarser, bounded state discretization to keep state space small.
+
 def discretize_state(state):
     return (
         min(state["ddos_detections"] // 5, 5),  # 0 to 5
@@ -533,8 +502,6 @@ def discretize_state(state):
     )
 
 
-# Updated reward function:
-# Instead of heavily penalizing, we now give a bonus for a high success rate.
 def compute_reward():
     state = compute_summary()
     total_concurrent = state["concurrent_found"] + state["concurrent_not_found"]
@@ -657,12 +624,12 @@ def run_rl_loop():
     last_action = None
     last_reward = 0
     while True:
-        time.sleep(10)  # RL update interval
+        time.sleep(10)
         reward, current_full_state = compute_reward()
         current_state = discretize_state(current_full_state)
         action = choose_action(last_state)
         apply_action(action)
-        time.sleep(10)  # Allow time for action effects
+        time.sleep(10)
         new_reward, new_full_state = compute_reward()
         new_state = discretize_state(new_full_state)
         update_q(last_state, action, new_reward, new_state)
@@ -671,13 +638,10 @@ def run_rl_loop():
         last_state = new_state
         last_reward = new_reward
         cumulative_rl_reward += new_reward
-        # Slow epsilon decay a bit more (e.g., multiply by 0.998 per cycle)
         EPSILON = max(0.01, EPSILON * 0.998)
 
 
-###############################################################################
-# RL ACTIONS
-###############################################################################
+
 def apply_action(action):
     global DDOS_THRESHOLD_REQUESTS, SYBIL_MAX_PER_BUCKET, POISONING_FAILURE_THRESHOLD, ECLIPSE_DIVERSITY_THRESHOLD, global_network
     if action == "increase_ddos_mitigation":
@@ -719,9 +683,7 @@ def apply_action(action):
         log(f"[RL Action] Triggered eclipse mitigation on Node {victim.node_id}.")
 
 
-###############################################################################
-# SIMULATION FUNCTIONS
-###############################################################################
+
 def simulate_normal_traffic(network, num_requests=NUM_NORMAL_REQUESTS):
     for _ in range(num_requests):
         key = f"normal_file_{random.randint(1, 100)}.txt"
@@ -874,9 +836,8 @@ def simulate_eclipse_attack(network, duration=ECLIPSE_DURATION, num_eclipse_node
     mitigate_eclipse_attack(network, victim, threshold=ECLIPSE_DIVERSITY_THRESHOLD)
 
 
-###############################################################################
-# CONTINUOUS SIMULATION LOOP (UPDATED)
-###############################################################################
+
+
 def continuous_simulation():
     global global_network
     log("\n🔹 Starting continuous Kademlia simulation...")
@@ -893,7 +854,6 @@ def continuous_simulation():
         st_nodes, rounds = store_value(net, k, f"Data for {k}")
         log(f"Stored '{k}' on {len(st_nodes)} nodes (lookup rounds: {rounds})")
 
-    # Continuous loop of traffic, attacks, and network churn.
     while True:
         simulate_normal_traffic(net, num_requests=500)
         attack_choice = random.choice(["ddos", "sybil", "poison", "eclipse"])

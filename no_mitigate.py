@@ -9,11 +9,9 @@ import pandas as pd
 import numpy as np
 import joblib
 
-###############################################################################
-# GLOBAL LOG STORAGE & HELPER
-###############################################################################
-dashboard_logs = []  # All logs
-concurrent_lookup_logs = []  # Only [Concurrent Lookup] lines
+
+dashboard_logs = []
+concurrent_lookup_logs = []
 
 def log(message):
     print(message)
@@ -21,9 +19,8 @@ def log(message):
     if "[Concurrent Lookup]" in message:
         concurrent_lookup_logs.append(message)
 
-###############################################################################
-# LOAD ML MODEL / SCALER
-###############################################################################
+
+
 MODEL_PATH = "random_forest_p2p.pkl"
 SCALER_PATH = "scaler_p2p.pkl"
 
@@ -36,9 +33,8 @@ try:
 except Exception as e:
     log("Error loading model/scaler: " + str(e))
 
-###############################################################################
-# SIMULATION CONSTANTS
-###############################################################################
+
+
 BITSPACE = 16
 BUCKET_SIZE = 7
 ALPHA = 3
@@ -60,23 +56,20 @@ ECLIPSE_DURATION = 30
 
 LOOKUP_KEYS = ["fileA.txt", "fileB.mp4", "docC.pdf"]
 
-###############################################################################
-# GLOBAL NETWORK POINTER
-###############################################################################
+
+
 global_network = None
 
-###############################################################################
-# UTILS
-###############################################################################
+
+
 def generate_random_ip():
     return f"192.168.{random.randint(0, 255)}.{random.randint(1, 254)}"
 
 def xor_distance(a, b):
     return a ^ b
 
-###############################################################################
-# ML-BASED DDoS DETECTION
-###############################################################################
+
+
 def detect_ddos_ml(features):
     FEATURE_NAMES = ['attacker_id', 'victim_id', 'latency', 'attack_requests',
                      'failed_lookups', 'total_requests', 'peer_diversity', 'base_latency']
@@ -90,7 +83,6 @@ def detect_ddos_ml(features):
         prediction = rf_model.predict(df_scaled)
         return int(prediction[0])
     else:
-        # Fallback heuristic if model/scaler isn't loaded
         if features['latency'] > LATENCY_THRESHOLD or features['attack_requests'] > 5:
             return 1
         return 0
@@ -98,9 +90,8 @@ def detect_ddos_ml(features):
 def print_detection(victim):
     log(f"DDoS Attack detected on Node {victim.node_id}")
 
-###############################################################################
-# NODE & NETWORK CLASSES
-###############################################################################
+
+
 class Node:
     def __init__(self, node_id, ip=None):
         self.node_id = node_id
@@ -211,9 +202,7 @@ class Network:
     def all_nodes(self):
         return list(self.nodes.values())
 
-###############################################################################
-# LOOKUP & STORE FUNCTIONS
-###############################################################################
+
 def iterative_lookup(network, start_node, target_id, alpha=ALPHA, max_rounds=MAX_ROUNDS):
     queried = set()
     shortlist = set(start_node.find_node(target_id))
@@ -284,9 +273,8 @@ def lookup_value(network, key, start_node, max_rounds=MAX_ROUNDS):
             break
     return None, rounds
 
-###############################################################################
-# CONCURRENT LOOKUPS
-###############################################################################
+
+
 def concurrent_lookups(network, keys, duration, interval=2):
     start_time = time.time()
     while time.time() - start_time < duration:
@@ -299,9 +287,8 @@ def concurrent_lookups(network, keys, duration, interval=2):
                 log(f"[Concurrent Lookup] '{key}' not found from node {start_node.node_id}.")
         time.sleep(interval)
 
-###############################################################################
-# SIMULATION FUNCTIONS (No Mitigation) - AGGRESSIVE ATTACKS
-###############################################################################
+
+
 def simulate_normal_traffic(network, num_requests=NUM_NORMAL_REQUESTS):
     for _ in range(num_requests):
         key = f"normal_file_{random.randint(1, 100)}.txt"
@@ -324,7 +311,6 @@ def simulate_ddos_attack(network, duration=DDOS_DURATION, num_attackers=NUM_ATTA
     t = threading.Thread(target=concurrent_lookups, args=(network, keys, duration))
     t.start()
     t0 = time.time()
-    # Increase iterations for more aggressive attack (from 5 to 10)
     while time.time() - t0 < duration:
         for _ in range(10):
             attacker = random.choice(attackers)
@@ -360,7 +346,6 @@ def simulate_ddos_attack(network, duration=DDOS_DURATION, num_attackers=NUM_ATTA
         v.ddos_detected = False
 
 def simulate_sybil_attack(network, num_sybil=100):
-    # Increase number of sybil identities to 100 (more aggressive)
     attacker = network.get_random_node()
     log(f"\nInitiating Sybil Attack: Attacker Node {attacker.node_id} creates {num_sybil} sybil identities.")
     sybil_nodes = []
@@ -387,7 +372,6 @@ def simulate_sybil_attack(network, num_sybil=100):
 
 def simulate_routing_table_poisoning(network, num_poisoners=20, duration=POISONING_DURATION,
                                      keys=LOOKUP_KEYS):
-    # Increase number of poisoners to 20 (more aggressive)
     log(f"\nInitiating Routing Table Poisoning attack for {duration}s by {num_poisoners} poisoners.")
     for node in network.all_nodes():
         for b_idx in range(BITSPACE):
@@ -416,7 +400,6 @@ def simulate_routing_table_poisoning(network, num_poisoners=20, duration=POISONI
     log(f"\nRouting Table Poisoning Summary: {pz} out of {total} entries ({perc:.2f}%) are poisoned.")
 
 def simulate_eclipse_attack(network, duration=ECLIPSE_DURATION, num_eclipse_nodes=50, keys=LOOKUP_KEYS):
-    # Increase number of eclipse nodes to 50 (more aggressive)
     victim = network.get_random_node()
     log(f"\nInitiating Eclipse Attack on Node {victim.node_id} for {duration}s using {num_eclipse_nodes} eclipse nodes.")
     e_nodes = []
@@ -443,9 +426,7 @@ def simulate_eclipse_attack(network, duration=ECLIPSE_DURATION, num_eclipse_node
     perc = (ec / total * 100) if total else 0
     log(f"\nEclipse Attack Summary on Node {victim.node_id}: {ec}/{total} entries ({perc:.2f}%) are eclipse nodes.")
 
-###############################################################################
-# SUMMARY FUNCTION: PARSE LOGS FOR KEY METRICS
-###############################################################################
+
 def compute_summary():
     """
     Parse dashboard_logs to extract relevant metrics for the no-mitigation dashboard.
@@ -476,27 +457,22 @@ def compute_summary():
         "ddos_avg_latency": 0.0
     }
 
-    # Track DDoS victims to compute average latency
     ddos_victims = []
 
     for line in dashboard_logs:
-        # Count DDoS detections
         if "DDoS Attack detected on Node" in line:
             summary["ddos_detections"] += 1
 
-        # Sybil summary lines
         m = re.search(r"Sybil Attack Summary: (\d+) sybil nodes added", line)
         if m:
             summary["sybil_nodes_added"] += int(m.group(1))
 
-        # Concurrent lookups
         if "[Concurrent Lookup]" in line:
             if "Found" in line:
                 summary["concurrent_found"] += 1
             else:
                 summary["concurrent_not_found"] += 1
 
-        # DDoS Attack Summary lines
         m = re.search(r"Victim Node (\d+) -> Attack Requests: (\d+), Total Latency: ([\d\.]+)s", line)
         if m:
             ddos_victims.append({
@@ -505,7 +481,6 @@ def compute_summary():
                 "latency": float(m.group(3))
             })
 
-    # Compute ddos_victims_count, total_latency, avg_latency
     if ddos_victims:
         summary["ddos_victims_count"] = len(ddos_victims)
         tot_lat = sum(v["latency"] for v in ddos_victims)
@@ -521,9 +496,7 @@ def compute_summary():
 
     return summary
 
-###############################################################################
-# CONTINUOUS SIMULATION LOOP
-###############################################################################
+
 def continuous_simulation():
     global global_network
     log("\n🔹 Starting continuous Kademlia simulation...")
@@ -540,12 +513,10 @@ def continuous_simulation():
         st_nodes, rounds = store_value(net, k, f"Data for {k}")
         log(f"Stored '{k}' on {len(st_nodes)} nodes (lookup rounds: {rounds})")
 
-    # Continuous loop of traffic, attacks, and network churn.
     while True:
         simulate_normal_traffic(net, num_requests=500)
         attack_choice = random.choice(["ddos", "sybil", "poison", "eclipse"])
         if attack_choice == "ddos":
-            # Increase attackers to 10 and victims to 100 for more aggressive DDoS
             simulate_ddos_attack(net, duration=10, num_attackers=10, num_victims=100, keys=keys)
         elif attack_choice == "sybil":
             simulate_sybil_attack(net, num_sybil=100)
@@ -554,7 +525,6 @@ def continuous_simulation():
         elif attack_choice == "eclipse":
             simulate_eclipse_attack(net, duration=10, num_eclipse_nodes=50, keys=keys)
 
-        # Random node leaves / new node joins
         if random.random() < 0.3:
             leaving = net.get_random_node()
             log(f"* Node {leaving.node_id} is leaving the network.")
@@ -577,9 +547,7 @@ def continuous_simulation():
         time.sleep(5)
 
 
-###############################################################################
-# FLASK APP
-###############################################################################
+
 app = Flask(__name__)
 
 @app.route("/")
